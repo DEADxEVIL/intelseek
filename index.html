@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INTEL·SEEK · OSINT Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="login-page">
+    <div class="cyber-grid"></div>
+    
+    <div class="login-container">
+        <div class="login-header">
+            <div class="logo">
+                <span class="logo-icon"><i class="fas fa-eye"></i></span>
+                <span class="logo-text">INTEL<span class="accent">·SEEK</span></span>
+            </div>
+            <div class="status-badge">
+                <span class="dot"></span>
+                <span>CLASSIFIED ACCESS</span>
+            </div>
+        </div>
+
+        <div class="login-box">
+            <div class="terminal-bar">
+                <span class="terminal-title">AUTHENTICATION REQUIRED</span>
+                <span class="terminal-controls">
+                    <i class="fas fa-minus"></i>
+                    <i class="fas fa-square"></i>
+                    <i class="fas fa-times"></i>
+                </span>
+            </div>
+            
+            <div class="login-content">
+                <div class="access-level">
+                    <select id="accessSelect" class="access-select">
+                        <option value="owner">🔐 OWNER ACCESS</option>
+                        <option value="admin">🛡️ ADMIN ACCESS</option>
+                    </select>
+                </div>
+
+                <form id="loginForm">
+                    <div class="input-group">
+                        <label><i class="fas fa-user-shield"></i> USERNAME</label>
+                        <input type="text" id="username" placeholder="Enter credentials..." autocomplete="off">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label><i class="fas fa-key"></i> PASSWORD</label>
+                        <input type="password" id="password" placeholder="Enter passkey...">
+                    </div>
+
+                    <div class="security-note">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>SECURE • ENCRYPTED • CLASSIFIED</span>
+                    </div>
+
+                    <button type="submit" class="login-btn" id="loginBtn">
+                        <span>INITIALIZE ACCESS</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </form>
+
+                <div class="system-info">
+                    <div class="info-row">
+                        <span>SYSTEM:</span>
+                        <span>INTEL·SEEK v2.4.1</span>
+                    </div>
+                    <div class="info-row">
+                        <span>SESSION:</span>
+                        <span id="sessionId">R3D4-C7F2-9B1A-5E8D</span>
+                    </div>
+                    <div class="info-row">
+                        <span>STATUS:</span>
+                        <span class="status-waiting" id="loginStatus">AWAITING AUTHENTICATION</span>
+                    </div>
+                </div>
+                
+                <div class="setup-info" style="margin-top: 1rem; padding: 0.75rem; background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; border-radius: 4px; font-size: 0.75rem; display: none;" id="setupInfo">
+                    <i class="fas fa-info-circle" style="color: #ffc107;"></i>
+                    <span>First time? Use: owner / Owner@123 or admin / Admin@123</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="login-footer">
+            <span>© 2024 INTEL·SEEK • FOR AUTHORIZED USE ONLY</span>
+            <span class="separator">|</span>
+            <span>ALL ACCESSES ARE LOGGED</span>
+        </div>
+    </div>
+
+    <script src="login.js"></script>
+</body>
+</html>

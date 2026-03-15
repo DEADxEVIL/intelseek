@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INTEL·SEEK · DASHBOARD</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="dashboard-page">
+    <div class="cyber-grid"></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <span class="logo-icon"><i class="fas fa-eye"></i></span>
+                <span class="logo-text">INTEL<span class="accent">·SEEK</span></span>
+            </div>
+        </div>
+
+        <div class="user-info">
+            <div class="user-avatar">
+                <i class="fas fa-user-secret"></i>
+            </div>
+            <div class="user-details">
+                <span class="user-name" id="displayName">USER</span>
+                <span class="user-role" id="displayRole">LOADING...</span>
+            </div>
+        </div>
+
+        <div class="session-timer">
+            <i class="fas fa-hourglass-half"></i>
+            <span>SESSION: <span id="sessionTimer">00:00</span></span>
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <div class="nav-section-title">INTELLIGENCE</div>
+                <a href="#" class="nav-item active" id="searchTab">
+                    <i class="fas fa-search"></i>
+                    <span>Universal Search</span>
+                </a>
+                <a href="#" class="nav-item" id="historyTab">
+                    <i class="fas fa-history"></i>
+                    <span>Search History</span>
+                </a>
+            </div>
+
+            <div class="nav-section" id="adminNavSection" style="display: none;">
+                <div class="nav-section-title">ADMIN</div>
+                <a href="admin-panel.html" class="nav-item">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Admin Panel</span>
+                </a>
+            </div>
+
+            <div class="nav-section" id="ownerNavSection" style="display: none;">
+                <div class="nav-section-title">OWNER</div>
+                <a href="owner-panel.html" class="nav-item">
+                    <i class="fas fa-crown"></i>
+                    <span>Owner Panel</span>
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">SYSTEM</div>
+                <a href="#" id="logoutBtn" class="nav-item logout">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Terminate Session</span>
+                </a>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="top-bar">
+            <div class="search-quick">
+                <i class="fas fa-search"></i>
+                <input type="text" id="quickSearch" placeholder="Quick search... (Ctrl + K)">
+            </div>
+            <div class="top-bar-actions">
+                <span class="notification-badge">
+                    <i class="fas fa-bell"></i>
+                    <span class="badge" id="notificationBadge" style="display: none;">0</span>
+                </span>
+                <span class="system-status">
+                    <span class="dot dot-green"></span>
+                    <span id="systemStatus">ACTIVE</span>
+                </span>
+            </div>
+        </div>
+
+        <div class="content-area">
+            <!-- Search Panel -->
+            <div class="search-panel" id="searchPanel">
+                <div class="panel-header">
+                    <h2>UNIVERSAL SEARCH</h2>
+                    <div class="panel-actions">
+                        <span class="badge-encrypted" id="apiStatus">ENCRYPTED</span>
+                    </div>
+                </div>
+
+                <div class="search-filters">
+                    <div class="filter-tabs" id="categoryTabs">
+                        <!-- Categories loaded via JS -->
+                        <button class="filter-tab active" data-category="all">
+                            <i class="fas fa-globe"></i> All
+                        </button>
+                    </div>
+
+                    <div class="search-type-selector">
+                        <select id="searchType" class="access-select">
+                            <option value="">Select search type...</option>
+                            <!-- Options loaded via JS -->
+                        </select>
+                    </div>
+
+                    <div class="search-input-area">
+                        <input type="text" id="searchInput" class="search-input" placeholder="Enter search parameter...">
+                        <button class="search-button" id="searchBtn">
+                            <i class="fas fa-search"></i>
+                            <span>EXECUTE SEARCH</span>
+                        </button>
+                    </div>
+
+                    <div class="search-options">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="exactMatch" checked>
+                            <span class="checkmark"></span>
+                            <span>Exact match</span>
+                        </label>
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="saveHistory" checked>
+                            <span class="checkmark"></span>
+                            <span>Save to history</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Results Area -->
+                <div class="results-area">
+                    <div class="results-header">
+                        <span>SEARCH RESULTS</span>
+                        <span class="result-count" id="resultCount">0 records found</span>
+                    </div>
+
+                    <div class="results-placeholder" id="resultsPlaceholder">
+                        <i class="fas fa-binoculars"></i>
+                        <h3>INITIATE SEARCH</h3>
+                        <p>Enter parameters to begin intelligence gathering</p>
+                        <div class="placeholder-hint">
+                            <span id="exampleHint">Try: mobile, aadhaar, email, or vehicle</span>
+                        </div>
+                    </div>
+
+                    <!-- Results Container -->
+                    <div class="results-container" id="resultsContainer" style="display: none;">
+                        <pre id="resultsJson" class="results-json"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Panel (hidden by default) -->
+            <div class="search-panel" id="historyPanel" style="display: none;">
+                <div class="panel-header">
+                    <h2>SEARCH HISTORY</h2>
+                </div>
+                <div class="results-area">
+                    <div class="users-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Type</th>
+                                    <th>Search Term</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <tr>
+                                    <td colspan="4" style="text-align: center; padding: 2rem;">
+                                        <i class="fas fa-spinner fa-pulse"></i> Loading history...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="quick-stats">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-database"></i></div>
+                    <div class="stat-details">
+                        <span class="stat-value" id="totalRecords">0</span>
+                        <span class="stat-label">Records Available</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-search"></i></div>
+                    <div class="stat-details">
+                        <span class="stat-value" id="searchesToday">0</span>
+                        <span class="stat-label">Searches Today</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-shield-alt"></i></div>
+                    <div class="stat-details">
+                        <span class="stat-value" id="encryptionType">AES-256</span>
+                        <span class="stat-label">Encryption</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

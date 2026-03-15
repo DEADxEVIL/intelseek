@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OWNER PANEL · INTEL·SEEK</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Owner Panel Specific Styles */
+        .owner-panel {
+            padding: 2rem;
+        }
+        
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        
+        .owner-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+        }
+        
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        .users-table {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+        
+        .users-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .users-table th {
+            background: var(--bg-tertiary);
+            padding: 1rem;
+            text-align: left;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .users-table td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.875rem;
+        }
+        
+        .role-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .role-badge.owner {
+            background: rgba(255, 59, 59, 0.1);
+            color: var(--accent-danger);
+            border: 1px solid var(--accent-danger);
+        }
+        
+        .role-badge.admin {
+            background: rgba(0, 255, 157, 0.1);
+            color: var(--accent-primary);
+            border: 1px solid var(--accent-primary);
+        }
+        
+        .action-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 0.25rem;
+            transition: all 0.3s;
+        }
+        
+        .action-btn:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+        
+        .action-btn.delete:hover {
+            border-color: var(--accent-danger);
+            color: var(--accent-danger);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            width: 100%;
+            max-width: 500px;
+            padding: 2rem;
+        }
+        
+        .modal-content h2 {
+            margin-bottom: 1rem;
+            color: var(--accent-primary);
+        }
+        
+        .modal-content p {
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary);
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+            border-bottom: 2px solid transparent;
+        }
+        
+        .tab.active {
+            color: var(--accent-primary);
+            border-bottom-color: var(--accent-primary);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        .form-actions button {
+            flex: 1;
+        }
+        
+        .filter-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-controls select,
+        .filter-controls input {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem;
+            border-radius: 4px;
+            min-width: 150px;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="cyber-grid"></div>
+    
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <span class="logo-icon"><i class="fas fa-crown"></i></span>
+                <span class="logo-text">OWNER<span class="accent">·PANEL</span></span>
+            </div>
+        </div>
+        
+        <div class="user-info">
+            <div class="user-avatar">
+                <i class="fas fa-crown"></i>
+            </div>
+            <div class="user-details">
+                <span class="user-name" id="ownerName">OWNER</span>
+                <span class="user-role">FULL ACCESS</span>
+            </div>
+        </div>
+        
+        <nav class="sidebar-nav">
+            <div class="nav-section">
+                <div class="nav-section-title">CONTROL</div>
+                <a href="#" class="nav-item active" data-tab="dashboard">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="users">
+                    <i class="fas fa-users-cog"></i>
+                    <span>User Management</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="logs">
+                    <i class="fas fa-history"></i>
+                    <span>Audit Logs</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="config">
+                    <i class="fas fa-cog"></i>
+                    <span>Configuration</span>
+                </a>
+            </div>
+            
+            <div class="nav-section">
+                <a href="dashboard.html" class="nav-item">
+                    <i class="fas fa-search"></i>
+                    <span>Back to Search</span>
+                </a>
+                <a href="#" id="logoutBtn" class="nav-item logout">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Terminate Session</span>
+                </a>
+            </div>
+        </nav>
+    </div>
+    
+    <div class="main-content">
+        <div class="top-bar">
+            <h1>OWNER CONTROL PANEL</h1>
+            <div class="top-bar-actions">
+                <span class="system-status">
+                    <span class="dot dot-green"></span>
+                    OWNER ACTIVE
+                </span>
+            </div>
+        </div>
+        
+        <!-- Dashboard Tab -->
+        <div id="dashboardTab" class="tab-content active">
+            <div class="owner-stats" id="statsContainer">
+                <!-- Stats loaded via JS -->
+                <div class="stat-card">
+                    <div class="stat-value">Loading...</div>
+                    <div class="stat-label">Loading stats</div>
+                </div>
+            </div>
+            
+            <div class="recent-activity">
+                <h2>Recent Activity</h2>
+                <div class="users-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>User</th>
+                                <th>Role</th>
+                                <th>Type</th>
+                                <th>Search Term</th>
+                                <th>IP Address</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentLogs">
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 2rem;">
+                                    <i class="fas fa-spinner fa-pulse"></i> Loading logs...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Users Management Tab -->
+        <div id="usersTab" class="tab-content">
+            <div class="panel-header">
+                <h2>User Management</h2>
+                <button class="search-button" id="createAdminBtn">
+                    <i class="fas fa-user-plus"></i>
+                    <span>CREATE NEW ADMIN</span>
+                </button>
+            </div>
+            
+            <div class="users-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Role</th>
+                            <th>Created By</th>
+                            <th>Created At</th>
+                            <th>Last Login</th>
+                            <th>Status</th>
+                            <th>Searches</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <tr>
+                            <td colspan="9" style="text-align: center; padding: 2rem;">
+                                <i class="fas fa-spinner fa-pulse"></i> Loading users...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Audit Logs Tab -->
+        <div id="logsTab" class="tab-content">
+            <div class="panel-header">
+                <h2>Audit Logs</h2>
+                <div class="filter-controls">
+                    <select id="logUserFilter">
+                        <option value="">All Users</option>
+                    </select>
+                    <select id="logTypeFilter">
+                        <option value="">All Types</option>
+                    </select>
+                    <input type="date" id="logDateFrom">
+                    <input type="date" id="logDateTo">
+                    <button class="search-button" id="applyLogFilters">
+                        <i class="fas fa-filter"></i> APPLY
+                    </button>
+                </div>
+            </div>
+            
+            <div class="users-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>User</th>
+                            <th>Role</th>
+                            <th>Type</th>
+                            <th>Search Term</th>
+                            <th>IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTableBody">
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 2rem;">
+                                <i class="fas fa-spinner fa-pulse"></i> Loading logs...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="pagination" id="logsPagination">
+                    <!-- Pagination loaded via JS -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Configuration Tab -->
+        <div id="configTab" class="tab-content">
+            <div class="panel-header">
+                <h2>System Configuration</h2>
+            </div>
+            
+            <div class="config-section">
+                <h3>API Configuration</h3>
+                <div class="config-item">
+                    <label>Subhx API Key</label>
+                    <div class="config-value" id="apiKeyDisplay">
+                        <input type="password" id="apiKeyInput" value="PRIMESPARK">
+                        <button class="action-btn" id="showApiKey">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="search-button" id="updateApiKey">
+                            <i class="fas fa-save"></i> UPDATE
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create Admin Modal -->
+    <div class="modal" id="createAdminModal">
+        <div class="modal-content">
+            <h2>Create New Admin</h2>
+            <form id="createAdminForm">
+                <div class="input-group">
+                    <label>Username</label>
+                    <input type="text" id="newUsername" required>
+                </div>
+                <div class="input-group">
+                    <label>Password</label>
+                    <input type="password" id="newPassword" required>
+                </div>
+                <div class="input-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="confirmPassword" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="login-btn" id="cancelCreate">CANCEL</button>
+                    <button type="submit" class="login-btn">CREATE ADMIN</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Reset Password Modal -->
+    <div class="modal" id="resetPasswordModal">
+        <div class="modal-content">
+            <h2>Reset User Password</h2>
+            <p>Reset password for: <span id="resetUsername" style="color: var(--accent-primary); font-weight: bold;"></span></p>
+            <form id="resetPasswordForm">
+                <div class="input-group">
+                    <label>New Password</label>
+                    <input type="password" id="resetNewPassword" required placeholder="Enter new password">
+                </div>
+                <div class="input-group">
+                    <label>Confirm New Password</label>
+                    <input type="password" id="resetConfirmPassword" required placeholder="Confirm new password">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="login-btn" id="cancelReset">CANCEL</button>
+                    <button type="submit" class="login-btn">RESET PASSWORD</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script src="owner-panel.js"></script>
+</body>
+</html>
