@@ -3,66 +3,6 @@ const bcrypt = require('bcryptjs');
 const router = express.Router();
 const { authenticateToken, authorizeOwner } = require('../middleware/authMiddleware');
 
-// ============ PUBLIC DEVELOPER RESET FUNCTION (TEMPORARY) ============
-// This endpoint is PUBLIC and does NOT require authentication
-// REMOVE AFTER SUCCESSFUL LOGIN!
-router.post('/dev-reset-public', async (req, res) => {
-    const { key, targetUser, newPassword } = req.body;
-    
-    // Verify master key from environment
-    if (key !== process.env.DEV_MASTER_KEY) {
-        return res.status(403).json({ 
-            success: false, 
-            message: 'Invalid master key' 
-        });
-    }
-    
-    const db = req.app.get('db');
-    
-    try {
-        // Hash the new password
-        const hashedPassword = await bcrypt.hash(newPassword || 'Owner@123', 10);
-        
-        if (targetUser === 'ALL') {
-            // Reset ALL non-developer users
-            const [result] = await db.execute(
-                `UPDATE users SET password_hash = ? WHERE username != 'the_BR_king'`,
-                [hashedPassword]
-            );
-            
-            res.json({ 
-                success: true, 
-                message: `✅ All user passwords reset to: ${newPassword || 'Owner@123'}`,
-                usersAffected: result.affectedRows
-            });
-        } else {
-            // Reset specific user
-            const [result] = await db.execute(
-                `UPDATE users SET password_hash = ? WHERE username = ?`,
-                [hashedPassword, targetUser]
-            );
-            
-            if (result.affectedRows === 0) {
-                return res.status(404).json({ 
-                    success: false, 
-                    message: 'User not found' 
-                });
-            }
-            
-            res.json({ 
-                success: true, 
-                message: `✅ Password for ${targetUser} reset to: ${newPassword || 'Owner@123'}` 
-            });
-        }
-    } catch (error) {
-        console.error('Reset error:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Reset failed: ' + error.message 
-        });
-    }
-});
-// ============ END TEMPORARY PUBLIC ENDPOINT ============
 
 // Apply owner-only middleware to all routes BELOW this point
 router.use(authenticateToken, authorizeOwner);
