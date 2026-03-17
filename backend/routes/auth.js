@@ -159,11 +159,13 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// Change password endpoint
+// ========== FIXED CHANGE PASSWORD ENDPOINT ==========
 router.post('/change-password', authenticateToken, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.id; // Get user ID from token
     const db = req.app.get('db');
+    
+    console.log(`🔑 Password change requested for user ID: ${userId}`);
     
     if (!currentPassword || !newPassword) {
         return res.status(400).json({ 
@@ -180,19 +182,24 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     }
     
     try {
+        // Get user from database using the ID from token
         const [users] = await db.execute(
             'SELECT * FROM users WHERE id = ?',
             [userId]
         );
         
+        console.log(`User found: ${users.length > 0 ? 'YES' : 'NO'}`);
+        
         if (users.length === 0) {
             return res.status(404).json({ 
                 success: false, 
-                message: 'User not found' 
+                message: 'User not found. Please login again.' 
             });
         }
         
         const user = users[0];
+        
+        // Verify current password
         const validPassword = await bcrypt.compare(currentPassword, user.password_hash);
         
         if (!validPassword) {
@@ -202,18 +209,22 @@ router.post('/change-password', authenticateToken, async (req, res) => {
             });
         }
         
+        // Hash new password
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         
-        await db.execute(
+        // Update password
+        const [updateResult] = await db.execute(
             'UPDATE users SET password_hash = ? WHERE id = ?',
             [hashedPassword, userId]
         );
+        
+        console.log(`Update affected rows: ${updateResult.affectedRows}`);
         
         // Log password change
         await db.execute(
             `INSERT INTO audit_logs 
              (user_id, username, user_role, search_type, search_term, ip_address) 
-             VALUES (?, ?, ?, 'PASSWORD_CHANGE', 'Password changed', ?)`,
+             VALUES (?, ?, ?, 'PASSWORD_CHANGE', 'Password changed by self', ?)`,
             [userId, user.username, user.role, req.ip]
         );
         

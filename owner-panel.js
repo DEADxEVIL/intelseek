@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Reset password modal
+    // ========== FIXED RESET PASSWORD MODAL ==========
     const resetModal = document.getElementById('resetPasswordModal');
     const cancelReset = document.getElementById('cancelReset');
     let currentResetUserId = null;
@@ -133,14 +133,21 @@ document.addEventListener('DOMContentLoaded', function() {
             const confirm = document.getElementById('resetConfirmPassword').value;
             
             if (newPassword !== confirm) {
-                alert('Passwords do not match');
+                alert('❌ Passwords do not match');
                 return;
             }
             
             if (newPassword.length < 6) {
-                alert('Password must be at least 6 characters');
+                alert('❌ Password must be at least 6 characters');
                 return;
             }
+            
+            if (!window.currentResetUserId) {
+                alert('❌ No user selected for password reset');
+                return;
+            }
+            
+            console.log(`Resetting password for user ID: ${window.currentResetUserId}`);
             
             const submitBtn = resetForm.querySelector('button[type="submit"]');
             const originalText = submitBtn.innerHTML;
@@ -148,7 +155,7 @@ document.addEventListener('DOMContentLoaded', function() {
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> RESETTING...';
             
             try {
-                const response = await fetch(`/api/owner/users/${currentResetUserId}/reset-password`, {
+                const response = await fetch(`/api/owner/users/${window.currentResetUserId}/reset-password`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -160,14 +167,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('✅ Password reset successfully. User activated.');
+                    alert(`✅ ${data.message}`);
                     resetModal.classList.remove('active');
                     resetForm.reset();
-                    loadUsers();
+                    loadUsers(); // Refresh user list
                 } else {
                     alert('❌ Error: ' + data.message);
                 }
             } catch (error) {
+                console.error('Reset error:', error);
                 alert('❌ Failed: ' + error.message);
             } finally {
                 submitBtn.disabled = false;

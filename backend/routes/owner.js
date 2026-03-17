@@ -209,6 +209,100 @@ router.post('/users/:userId/toggle-status', async (req, res) => {
     }
 });
 
+// ========== FIXED RESET PASSWORD ENDPOINT ==========
+router.post('/users/:userId/reset-password', async (req, res) => {
+    const { userId } = req.params;
+    const { newPassword } = req.body;
+    const ownerId = req.user.id;
+    const isDeveloper = req.user.username === 'the_BR_king';
+    const db = req.app.get('db');
+    
+    console.log(`🔑 Password reset requested for user ID: ${userId} by: ${req.user.username}`);
+    
+    if (!newPassword) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'New password required' 
+        });
+    }
+    
+    if (newPassword.length < 6) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Password must be at least 6 characters' 
+        });
+    }
+    
+    try {
+        // First check if user exists
+        const [users] = await db.execute(
+            'SELECT * FROM users WHERE id = ?',
+            [userId]
+        );
+        
+        console.log(`Target user found: ${users.length > 0 ? 'YES' : 'NO'}`);
+        
+        if (users.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: `User with ID ${userId} not found` 
+            });
+        }
+        
+        const user = users[0];
+        
+        // Prevent resetting developer (unless it's developer themselves)
+        if (user.username === 'the_BR_king' && !isDeveloper) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Cannot reset developer password' 
+            });
+        }
+        
+        // Hash the new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        
+        // Update password AND ensure user is active
+        const [updateResult] = await db.execute(
+            'UPDATE users SET password_hash = ?, is_active = 1 WHERE id = ?',
+            [hashedPassword, userId]
+        );
+        
+        console.log(`Update affected rows: ${updateResult.affectedRows}`);
+        
+        if (updateResult.affectedRows === 0) {
+            return res.status(500).json({ 
+                success: false, 
+                message: 'Password update failed - no rows affected' 
+            });
+        }
+        
+        const actionType = isDeveloper ? 'DEV_RESET' : 'ADMIN_RESET';
+        const role = isDeveloper ? 'developer' : 'owner';
+        
+        // Log the action
+        await db.execute(
+            `INSERT INTO audit_logs 
+             (user_id, username, user_role, search_type, search_term, ip_address) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [ownerId, req.user.username, role, actionType, `Reset password for: ${user.username}`, req.ip]
+        );
+        
+        res.json({ 
+            success: true, 
+            message: `Password reset successfully for ${user.username}`,
+            userActivated: true
+        });
+        
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error: ' + error.message 
+        });
+    }
+});
+
 // Delete user (soft delete)
 router.delete('/users/:userId', async (req, res) => {
     const { userId } = req.params;
@@ -297,31 +391,14 @@ router.delete('/users/:userId', async (req, res) => {
     }
 });
 
-// Reset user password
-router.post('/users/:userId/reset-password', async (req, res) => {
+// Get user details by ID
+router.get('/users/:userId', async (req, res) => {
     const { userId } = req.params;
-    const { newPassword } = req.body;
-    const ownerId = req.user.id;
-    const isDeveloper = req.user.username === 'the_BR_king';
     const db = req.app.get('db');
-    
-    if (!newPassword) {
-        return res.status(400).json({ 
-            success: false, 
-            message: 'New password required' 
-        });
-    }
-    
-    if (newPassword.length < 6) {
-        return res.status(400).json({ 
-            success: false, 
-            message: 'Password must be at least 6 characters' 
-        });
-    }
     
     try {
         const [users] = await db.execute(
-            'SELECT * FROM users WHERE id = ?',
+            'SELECT id, username, role, is_active, created_at, last_login FROM users WHERE id = ?',
             [userId]
         );
         
@@ -332,42 +409,10 @@ router.post('/users/:userId/reset-password', async (req, res) => {
             });
         }
         
-        const user = users[0];
-        
-        // Prevent resetting developer (unless it's developer themselves)
-        if (user.username === 'the_BR_king' && !isDeveloper) {
-            return res.status(403).json({ 
-                success: false, 
-                message: 'Cannot reset developer password' 
-            });
-        }
-        
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        
-        // Update password AND ensure user is active
-        await db.execute(
-            'UPDATE users SET password_hash = ?, is_active = 1 WHERE id = ?',
-            [hashedPassword, userId]
-        );
-        
-        const actionType = isDeveloper ? 'DEV_RESET' : 'ADMIN_RESET';
-        const role = isDeveloper ? 'developer' : 'owner';
-        
-        await db.execute(
-            `INSERT INTO audit_logs 
-             (user_id, username, user_role, search_type, search_term, ip_address) 
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [ownerId, req.user.username, role, actionType, `Reset password for: ${user.username}`, req.ip]
-        );
-        
-        res.json({ 
-            success: true, 
-            message: `Password reset successfully for ${user.username}`,
-            userActivated: true
-        });
+        res.json({ success: true, user: users[0] });
         
     } catch (error) {
-        console.error('Reset password error:', error);
+        console.error('Get user error:', error);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
