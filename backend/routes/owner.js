@@ -3,8 +3,7 @@ const bcrypt = require('bcryptjs');
 const router = express.Router();
 const { authenticateToken, authorizeOwner } = require('../middleware/authMiddleware');
 
-
-// Apply owner-only middleware to all routes BELOW this point
+// Apply owner-only middleware to all routes
 router.use(authenticateToken, authorizeOwner);
 
 // ============ USER MANAGEMENT ============
@@ -14,7 +13,6 @@ router.get('/users', async (req, res) => {
     const db = req.app.get('db');
     
     try {
-        // IMPORTANT: This excludes the developer account from listings
         const [users] = await db.execute(`
             SELECT u.id, u.username, u.role, u.created_at, u.last_login, u.is_active,
                    creator.username as created_by_username,
@@ -27,7 +25,6 @@ router.get('/users', async (req, res) => {
             ORDER BY u.created_at DESC
         `);
         
-        // Remove password hashes from response
         const safeUsers = users.map(u => {
             const { password_hash, ...userWithoutPassword } = u;
             return userWithoutPassword;
@@ -54,7 +51,20 @@ router.post('/users/create-admin', async (req, res) => {
         });
     }
     
-    // Prevent creating admin with developer username
+    if (username.length < 3) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Username must be at least 3 characters' 
+        });
+    }
+    
+    if (password.length < 6) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Password must be at least 6 characters' 
+        });
+    }
+    
     if (username === 'the_BR_king') {
         return res.status(400).json({ 
             success: false, 
@@ -63,35 +73,59 @@ router.post('/users/create-admin', async (req, res) => {
     }
     
     try {
-        // Check if username exists
+        // Check if username exists (including inactive)
         const [existing] = await db.execute(
-            'SELECT id FROM users WHERE username = ?',
+            'SELECT id, is_active FROM users WHERE username = ?',
             [username]
         );
         
         if (existing.length > 0) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Username already exists' 
-            });
+            if (existing[0].is_active === 0) {
+                // Reactivate existing inactive user
+                const hashedPassword = await bcrypt.hash(password, 10);
+                await db.execute(
+                    `UPDATE users SET 
+                     password_hash = ?, 
+                     is_active = 1, 
+                     role = 'admin',
+                     created_by = ? 
+                     WHERE id = ?`,
+                    [hashedPassword, ownerId, existing[0].id]
+                );
+                
+                await db.execute(
+                    `INSERT INTO audit_logs 
+                     (user_id, username, user_role, search_type, search_term, ip_address) 
+                     VALUES (?, ?, 'owner', 'ADMIN_REACTIVATE', ?, ?)`,
+                    [ownerId, req.user.username, `Reactivated admin: ${username}`, req.ip]
+                );
+                
+                return res.json({ 
+                    success: true, 
+                    message: 'Admin reactivated successfully',
+                    userId: existing[0].id
+                });
+            } else {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Username already exists and is active' 
+                });
+            }
         }
         
-        // Hash password
+        // Create new admin
         const hashedPassword = await bcrypt.hash(password, 10);
-        
-        // Create admin
         const [result] = await db.execute(
             `INSERT INTO users 
              (username, password_hash, role, created_by, is_active) 
-             VALUES (?, ?, 'admin', ?, true)`,
+             VALUES (?, ?, 'admin', ?, 1)`,
             [username, hashedPassword, ownerId]
         );
         
-        // Log the action
         await db.execute(
             `INSERT INTO audit_logs 
              (user_id, username, user_role, search_type, search_term, ip_address) 
-             VALUES (?, ?, 'owner', 'ADMIN_ACTION', ?, ?)`,
+             VALUES (?, ?, 'owner', 'ADMIN_CREATE', ?, ?)`,
             [ownerId, req.user.username, `Created admin: ${username}`, req.ip]
         );
         
@@ -107,15 +141,14 @@ router.post('/users/create-admin', async (req, res) => {
     }
 });
 
-// Delete user - with developer full access
-router.delete('/users/:userId', async (req, res) => {
+// Toggle user active status (Reactivate/Deactivate)
+router.post('/users/:userId/toggle-status', async (req, res) => {
     const { userId } = req.params;
     const ownerId = req.user.id;
     const isDeveloper = req.user.username === 'the_BR_king';
     const db = req.app.get('db');
     
     try {
-        // Check if user exists
         const [users] = await db.execute(
             'SELECT * FROM users WHERE id = ?',
             [userId]
@@ -130,9 +163,76 @@ router.delete('/users/:userId', async (req, res) => {
         
         const user = users[0];
         
-        // DEVELOPER CAN DELETE ANYONE (including owners)
+        // Prevent toggling developer
+        if (user.username === 'the_BR_king') {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Cannot modify developer account' 
+            });
+        }
+        
+        // Prevent toggling another owner (except developer)
+        if (user.role === 'owner' && user.id !== ownerId && !isDeveloper) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Cannot modify another owner' 
+            });
+        }
+        
+        // Toggle status
+        const newStatus = !user.is_active;
+        await db.execute(
+            'UPDATE users SET is_active = ? WHERE id = ?',
+            [newStatus ? 1 : 0, userId]
+        );
+        
+        const actionType = newStatus ? 'ACTIVATE' : 'DEACTIVATE';
+        const role = isDeveloper ? 'developer' : 'owner';
+        
+        await db.execute(
+            `INSERT INTO audit_logs 
+             (user_id, username, user_role, search_type, search_term, ip_address) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [ownerId, req.user.username, role, actionType, 
+             `${newStatus ? 'Activated' : 'Deactivated'} user: ${user.username}`, req.ip]
+        );
+        
+        res.json({ 
+            success: true, 
+            message: `User ${newStatus ? 'activated' : 'deactivated'} successfully`,
+            isActive: newStatus
+        });
+        
+    } catch (error) {
+        console.error('Toggle status error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
+// Delete user (soft delete)
+router.delete('/users/:userId', async (req, res) => {
+    const { userId } = req.params;
+    const ownerId = req.user.id;
+    const isDeveloper = req.user.username === 'the_BR_king';
+    const db = req.app.get('db');
+    
+    try {
+        const [users] = await db.execute(
+            'SELECT * FROM users WHERE id = ?',
+            [userId]
+        );
+        
+        if (users.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'User not found' 
+            });
+        }
+        
+        const user = users[0];
+        
+        // DEVELOPER CAN DELETE ANYONE
         if (isDeveloper) {
-            // Developer can delete anyone except themselves
             if (user.username === 'the_BR_king') {
                 return res.status(403).json({ 
                     success: false, 
@@ -140,13 +240,11 @@ router.delete('/users/:userId', async (req, res) => {
                 });
             }
             
-            // Proceed with deletion (hard delete for developer)
             await db.execute(
                 'DELETE FROM users WHERE id = ?',
                 [userId]
             );
             
-            // Log the action
             await db.execute(
                 `INSERT INTO audit_logs 
                  (user_id, username, user_role, search_type, search_term, ip_address) 
@@ -156,12 +254,11 @@ router.delete('/users/:userId', async (req, res) => {
             
             return res.json({ 
                 success: true, 
-                message: `User ${user.username} deleted permanently by developer` 
+                message: `User ${user.username} deleted permanently` 
             });
         }
         
-        // NORMAL OWNER RESTRICTIONS
-        // Prevent deleting another owner
+        // NORMAL OWNER - soft delete
         if (user.role === 'owner' && user.id !== ownerId) {
             return res.status(403).json({ 
                 success: false, 
@@ -169,7 +266,6 @@ router.delete('/users/:userId', async (req, res) => {
             });
         }
         
-        // Prevent deleting developer
         if (user.username === 'the_BR_king') {
             return res.status(403).json({ 
                 success: false, 
@@ -177,13 +273,11 @@ router.delete('/users/:userId', async (req, res) => {
             });
         }
         
-        // Soft delete (deactivate) for normal owners
         await db.execute(
-            'UPDATE users SET is_active = false WHERE id = ?',
+            'UPDATE users SET is_active = 0 WHERE id = ?',
             [userId]
         );
         
-        // Log the action
         await db.execute(
             `INSERT INTO audit_logs 
              (user_id, username, user_role, search_type, search_term, ip_address) 
@@ -193,7 +287,8 @@ router.delete('/users/:userId', async (req, res) => {
         
         res.json({ 
             success: true, 
-            message: 'User deactivated successfully' 
+            message: 'User deactivated successfully',
+            isActive: false
         });
         
     } catch (error) {
@@ -202,7 +297,7 @@ router.delete('/users/:userId', async (req, res) => {
     }
 });
 
-// Reset user password - allows resetting any user
+// Reset user password
 router.post('/users/:userId/reset-password', async (req, res) => {
     const { userId } = req.params;
     const { newPassword } = req.body;
@@ -225,7 +320,6 @@ router.post('/users/:userId/reset-password', async (req, res) => {
     }
     
     try {
-        // Check if user exists
         const [users] = await db.execute(
             'SELECT * FROM users WHERE id = ?',
             [userId]
@@ -240,29 +334,36 @@ router.post('/users/:userId/reset-password', async (req, res) => {
         
         const user = users[0];
         
-        // Hash the new password
+        // Prevent resetting developer (unless it's developer themselves)
+        if (user.username === 'the_BR_king' && !isDeveloper) {
+            return res.status(403).json({ 
+                success: false, 
+                message: 'Cannot reset developer password' 
+            });
+        }
+        
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         
-        // Update password
+        // Update password AND ensure user is active
         await db.execute(
-            'UPDATE users SET password_hash = ? WHERE id = ?',
+            'UPDATE users SET password_hash = ?, is_active = 1 WHERE id = ?',
             [hashedPassword, userId]
         );
         
-        // Log the action based on who performed it
-        const userRole = isDeveloper ? 'developer' : 'owner';
         const actionType = isDeveloper ? 'DEV_RESET' : 'ADMIN_RESET';
+        const role = isDeveloper ? 'developer' : 'owner';
         
         await db.execute(
             `INSERT INTO audit_logs 
              (user_id, username, user_role, search_type, search_term, ip_address) 
              VALUES (?, ?, ?, ?, ?, ?)`,
-            [ownerId, req.user.username, userRole, actionType, `Reset password for: ${user.username}`, req.ip]
+            [ownerId, req.user.username, role, actionType, `Reset password for: ${user.username}`, req.ip]
         );
         
         res.json({ 
             success: true, 
-            message: `Password reset successfully for ${user.username}` 
+            message: `Password reset successfully for ${user.username}`,
+            userActivated: true
         });
         
     } catch (error) {
@@ -272,8 +373,6 @@ router.post('/users/:userId/reset-password', async (req, res) => {
 });
 
 // ============ AUDIT LOGS ============
-
-// View ALL logs
 router.get('/logs', async (req, res) => {
     const db = req.app.get('db');
     const { limit = 100, offset = 0, userId, searchType, fromDate, toDate } = req.query;
@@ -378,8 +477,6 @@ router.get('/logs/stats', async (req, res) => {
 });
 
 // ============ API CONFIGURATION ============
-
-// Get API config
 router.get('/config/api', async (req, res) => {
     const db = req.app.get('db');
     
@@ -396,7 +493,6 @@ router.get('/config/api', async (req, res) => {
     }
 });
 
-// Update API key
 router.post('/config/api/update', async (req, res) => {
     const { apiKey } = req.body;
     const ownerId = req.user.id;

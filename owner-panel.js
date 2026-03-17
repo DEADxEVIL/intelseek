@@ -26,7 +26,6 @@ document.addEventListener('DOMContentLoaded', function() {
             tabContents.forEach(tab => tab.classList.remove('active'));
             document.getElementById(tabId + 'Tab').classList.add('active');
             
-            // Load tab data
             if (tabId === 'dashboard') loadDashboard();
             if (tabId === 'users') loadUsers();
             if (tabId === 'logs') loadLogs();
@@ -69,6 +68,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            if (username.length < 3) {
+                alert('Username must be at least 3 characters');
+                return;
+            }
+            
+            if (password.length < 6) {
+                alert('Password must be at least 6 characters');
+                return;
+            }
+            
+            const submitBtn = createForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CREATING...';
+            
             try {
                 const response = await fetch('/api/owner/users/create-admin', {
                     method: 'POST',
@@ -82,15 +96,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('✅ Admin created successfully');
+                    alert('✅ Admin created/reactivated successfully');
                     createModal.classList.remove('active');
                     createForm.reset();
-                    loadUsers(); // Refresh user list
+                    loadUsers();
                 } else {
                     alert('❌ Error: ' + data.message);
                 }
             } catch (error) {
-                alert('❌ Failed to create admin: ' + error.message);
+                alert('❌ Failed: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
             }
         });
     }
@@ -125,7 +142,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // Disable button during submission
             const submitBtn = resetForm.querySelector('button[type="submit"]');
             const originalText = submitBtn.innerHTML;
             submitBtn.disabled = true;
@@ -144,15 +160,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('✅ Password reset successfully');
+                    alert('✅ Password reset successfully. User activated.');
                     resetModal.classList.remove('active');
                     resetForm.reset();
-                    loadUsers(); // Refresh user list
+                    loadUsers();
                 } else {
                     alert('❌ Error: ' + data.message);
                 }
             } catch (error) {
-                alert('❌ Failed to reset password: ' + error.message);
+                alert('❌ Failed: ' + error.message);
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalText;
@@ -174,7 +190,6 @@ async function loadDashboard() {
     const token = localStorage.getItem('intelSeekToken');
     
     try {
-        // Load stats
         const statsResponse = await fetch('/api/owner/logs/stats', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -204,7 +219,6 @@ async function loadDashboard() {
             }
         }
         
-        // Load recent logs
         const logsResponse = await fetch('/api/owner/logs?limit=10', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -256,7 +270,7 @@ async function loadDashboard() {
     }
 }
 
-// Load users list
+// Load users list - WITH REACTIVATE BUTTON
 async function loadUsers() {
     const token = localStorage.getItem('intelSeekToken');
     
@@ -285,12 +299,22 @@ async function loadUsers() {
                             </td>
                             <td>${user.total_searches || 0}</td>
                             <td>
-                                <!-- Reset Password Button - Visible for ALL users (including owners) -->
+                                <!-- Reset Password Button -->
                                 <button class="action-btn reset-password" data-id="${user.id}" data-username="${user.username}" title="Reset Password">
                                     <i class="fas fa-key"></i>
                                 </button>
                                 
-                                <!-- Delete Button - Only for admins, not owners -->
+                                <!-- Toggle Active Status Button -->
+                                ${user.is_active ? 
+                                    `<button class="action-btn deactivate" data-id="${user.id}" data-username="${user.username}" title="Deactivate User">
+                                        <i class="fas fa-ban"></i>
+                                     </button>` :
+                                    `<button class="action-btn activate" data-id="${user.id}" data-username="${user.username}" title="Reactivate User">
+                                        <i class="fas fa-check-circle"></i>
+                                     </button>`
+                                }
+                                
+                                <!-- Delete Button (only for admins, not owners) -->
                                 ${user.role === 'admin' ? `
                                     <button class="action-btn delete" data-id="${user.id}" title="Delete User">
                                         <i class="fas fa-trash"></i>
@@ -300,28 +324,40 @@ async function loadUsers() {
                         </tr>
                     `).join('');
                     
-                    // Add event listeners for reset password buttons
+                    // Reset password buttons
                     document.querySelectorAll('.reset-password').forEach(btn => {
                         btn.addEventListener('click', () => {
                             const userId = btn.dataset.id;
                             const username = btn.dataset.username;
-                            
-                            // Show reset password modal
                             document.getElementById('resetUsername').textContent = username;
                             document.getElementById('resetPasswordModal').classList.add('active');
                             window.currentResetUserId = userId;
                         });
                     });
                     
-                    // Add event listeners for delete buttons
+                    // Activate/Deactivate buttons
+                    document.querySelectorAll('.activate, .deactivate').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            const userId = btn.dataset.id;
+                            const username = btn.dataset.username;
+                            const action = btn.classList.contains('activate') ? 'activate' : 'deactivate';
+                            
+                            if (confirm(`Are you sure you want to ${action} user ${username}?`)) {
+                                await toggleUserStatus(userId);
+                            }
+                        });
+                    });
+                    
+                    // Delete buttons
                     document.querySelectorAll('.delete').forEach(btn => {
                         btn.addEventListener('click', async () => {
                             const userId = btn.dataset.id;
-                            if (confirm('Are you sure you want to deactivate this user?')) {
+                            if (confirm('Are you sure you want to delete this user permanently?')) {
                                 await deleteUser(userId);
                             }
                         });
                     });
+                    
                 } else {
                     tbody.innerHTML = `
                         <tr>
@@ -349,6 +385,29 @@ async function loadUsers() {
     }
 }
 
+// Toggle user status function
+async function toggleUserStatus(userId) {
+    const token = localStorage.getItem('intelSeekToken');
+    
+    try {
+        const response = await fetch(`/api/owner/users/${userId}/toggle-status`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`✅ User ${data.isActive ? 'activated' : 'deactivated'} successfully`);
+            loadUsers(); // Refresh the list
+        } else {
+            alert('❌ Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('❌ Failed to toggle status: ' + error.message);
+    }
+}
+
 // Delete user function
 async function deleteUser(userId) {
     const token = localStorage.getItem('intelSeekToken');
@@ -362,13 +421,13 @@ async function deleteUser(userId) {
         const data = await response.json();
         
         if (data.success) {
-            alert('✅ User deactivated successfully');
-            loadUsers(); // Refresh list
+            alert('✅ User deleted/deactivated successfully');
+            loadUsers();
         } else {
             alert('❌ Error: ' + data.message);
         }
     } catch (error) {
-        alert('❌ Failed to deactivate user: ' + error.message);
+        alert('❌ Failed: ' + error.message);
     }
 }
 
@@ -414,7 +473,6 @@ async function loadLogs(page = 0) {
                 }
             }
             
-            // Update filters
             const userFilter = document.getElementById('logUserFilter');
             if (userFilter && data.logs) {
                 const uniqueUsers = [...new Set(data.logs.map(l => l.username))];
@@ -422,7 +480,6 @@ async function loadLogs(page = 0) {
                     uniqueUsers.map(u => `<option value="${u}">${u}</option>`).join('');
             }
             
-            // Update type filter
             const typeFilter = document.getElementById('logTypeFilter');
             if (typeFilter && data.logs) {
                 const uniqueTypes = [...new Set(data.logs.map(l => l.search_type))];
@@ -430,7 +487,6 @@ async function loadLogs(page = 0) {
                     uniqueTypes.map(t => `<option value="${t}">${t}</option>`).join('');
             }
             
-            // Update pagination
             const pagination = document.getElementById('logsPagination');
             if (pagination) {
                 const totalPages = Math.ceil(data.total / limit);
@@ -458,7 +514,6 @@ async function loadLogs(page = 0) {
 
 // Load configuration
 function loadConfig() {
-    // Show/hide API key
     document.getElementById('showApiKey')?.addEventListener('click', function() {
         const input = document.getElementById('apiKeyInput');
         if (input.type === 'password') {
@@ -470,7 +525,6 @@ function loadConfig() {
         }
     });
     
-    // Update API key
     document.getElementById('updateApiKey')?.addEventListener('click', async function() {
         const token = localStorage.getItem('intelSeekToken');
         const apiKey = document.getElementById('apiKeyInput').value;
@@ -503,7 +557,7 @@ function loadConfig() {
             }
         } catch (error) {
             console.error('Update error:', error);
-            alert('❌ Failed to update API key: ' + error.message);
+            alert('❌ Failed: ' + error.message);
         } finally {
             this.disabled = false;
             this.innerHTML = originalText;
