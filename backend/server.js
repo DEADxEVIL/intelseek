@@ -45,27 +45,27 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth/', authLimiter);
 app.use('/api/', apiLimiter);
 
-// Database connection configuration
+// ========== DATABASE CONFIGURATION FOR TIDB CLOUD ==========
 const dbConfig = {
     host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 3306,
+    port: parseInt(process.env.DB_PORT) || 3306,
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'intelseek_db',
+    database: process.env.DB_NAME || 'test',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
     enableKeepAlive: true,
-    keepAliveInitialDelay: 0
+    keepAliveInitialDelay: 0,
+    // TiDB Cloud Serverless REQUIRES TLS 1.2+ secure connections
+    ssl: {
+        minVersion: 'TLSv1.2',
+        rejectUnauthorized: true
+    }
 };
 
-// Add SSL for production (Railway MySQL requires SSL)
-if (process.env.NODE_ENV === 'production') {
-    dbConfig.ssl = {
-        rejectUnauthorized: false
-    };
-    console.log('🔒 SSL enabled for production database connection');
-}
+console.log('🔒 SSL enabled for TiDB Cloud database connection');
+console.log(`📊 Connecting to: ${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
 
 // Create database connection pool
 const pool = mysql.createPool(dbConfig);
@@ -80,6 +80,15 @@ async function testDbConnection(retries = 5, delay = 5000) {
             const connection = await pool.getConnection();
             console.log('✅ Database connected successfully');
             console.log(`📊 Connected to: ${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
+            
+            // Verify users table exists
+            try {
+                const [rows] = await connection.execute('SELECT COUNT(*) as count FROM users');
+                console.log(`👥 Users in database: ${rows[0].count}`);
+            } catch (tableError) {
+                console.log('⚠️  Users table check failed:', tableError.message);
+            }
+            
             connection.release();
             return true;
         } catch (error) {
